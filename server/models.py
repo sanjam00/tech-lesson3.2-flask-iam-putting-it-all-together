@@ -8,7 +8,7 @@ class User(db.Model):
   __tablename__ = "users"
 
   id = db.Column(db.Integer, primary_key=True)
-  username = db.Column(db.String)
+  username = db.Column(db.String, unique=True, nullable=False)
   _password_hash = db.Column(db.String)
 
   # connects to posts table
@@ -39,15 +39,31 @@ class User(db.Model):
   
 class Post(db.Model):
   __tablename__ = 'posts'
+  __table_args__ = (
+    db.CheckConstraint('length(content) <= 400'),
+  )
 
   id = db.Column(db.Integer, primary_key = True)
-  content = db.Column(db.String)
+  content = db.Column(db.String, nullable=False)
 
   # establish relationship between tables
   # one to many relationship, so this side has the foreign key for users since it's the "many" side
-  user_id = db.Column(db.Inteteger(), db.ForeignKey('users.id'))
+  user_id = db.Column(db.Integer(), db.ForeignKey('users.id'))
   user = db.relationship('User', back_populates = 'posts')
 
   def __repr__(self):
     return f'<Post {self.id}>: {self.content}'
   
+# schemas
+
+class UserSchema(Schema):
+  id = fields.Int()
+  username = fields.String()
+
+  posts = fields.List(fields.Nested(lambda: PostSchema(exclude=("user",))))
+
+class PostSchema(Schema):
+  id = fields.Int()
+  content = fields.String()
+
+  user = fields.Nested(UserSchema(exclude=("posts",)))
