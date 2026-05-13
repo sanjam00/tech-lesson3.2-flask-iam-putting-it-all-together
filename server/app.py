@@ -7,6 +7,19 @@ from sqlalchemy.exc import IntegrityError
 from config import app, db, api
 from models import User, UserSchema, Post, PostSchema
 
+@app.before_request
+def check_if_logged_in():
+    open_access_list = [
+        'signup',
+        'login',
+        'check_session'
+    ]
+
+    if (request.endpoint) not in open_access_list and (not session.get('user_id')):
+        return {'error': '401 Unauthorized'}, 401
+
+# routes
+
 class Signup(Resource):
     def post(self):
         request_json = request.get_json()
@@ -57,12 +70,49 @@ class Logout(Resource):
             session['user_id'] = None
             return {}, 401
         return {}, 401
+    
+class PostIndex(Resource):
+
+    # displays posts
+    def get(self):
+        posts = [PostSchema().dump(post) for post in Post.query.all()]
+
+        return posts, 200
+    
+    # create post
+    def post(self):
+        request_json = request.get_json()
+
+        post = Post(
+            content=request_json.get('content'),
+            user_id=session['user_id']
+        )
+
+        try:
+            db.session.add(post)
+            db.session.commit()
+            return PostSchema().dump(post), 201
+        except IntegrityError:
+            return {'error': '422 Unprocessable Entity'}, 422
+        
+class Post(Resource):
+    def delete(self, id):
+        post = Post.query.filter(Post.id == id).first()
+
+        if post and post.user_id == session['user_id']:
+            db.session.delete(post)
+            db.session.commit()
+            return {}, 204
+        return {'error': '403 Forbidden'}, 403
 
 # routes
 api.add_resource(Signup, '/signup', endpoint='signup')
 api.add_resource(CheckSession, '/check_session', endpoint='check_session')
 api.add_resource(Login, '/login', endpoint='login')
 api.add_resource(Logout, '/logout', endpoint='logout')
+
+api.add_resource(PostIndex, '/posts', endpoint='posts')
+api.add_resource(Post, '/posts/<int:id>', endpoint='post')
 
 
 if __name__ == '__main__':
